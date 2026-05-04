@@ -114,7 +114,7 @@ async function sendGwmCommand(serviceCode, instructions) {
     const { accessToken: at, refreshToken: rt } = await getTokens();
     const seqNo = makeSeqNo();
     const body  = {
-        vin:              cfg.gwm_vin,
+        vin:              cfg.gwm_vin.toUpperCase(),
         securityPassword: md5(cfg.gwm_pin),
         seqNo,
         serviceCode,
