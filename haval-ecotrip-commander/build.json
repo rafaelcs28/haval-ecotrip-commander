@@ -1,10 +1,10 @@
 {
   "build_from": {
-    "aarch64": "ghcr.io/home-assistant/aarch64-base:latest",
-    "amd64": "ghcr.io/home-assistant/amd64-base:latest",
-    "armhf": "ghcr.io/home-assistant/armhf-base:latest",
-    "armv7": "ghcr.io/home-assistant/armv7-base:latest",
-    "i386": "ghcr.io/home-assistant/i386-base:latest"
+    "aarch64": "node:18-alpine",
+    "amd64": "node:18-alpine",
+    "armhf": "node:18-alpine",
+    "armv7": "node:18-alpine",
+    "i386": "node:18-alpine"
   },
   "squash": false,
   "args": {}
