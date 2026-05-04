@@ -21,9 +21,9 @@ const CMD_TIMEOUT    = (cfg.cmd_timeout_s  || 30) * 1000;
 const STATUS_TOPIC        = `${PREFIX}/status`;
 const CMD_CHARGE_LIMIT    = `${PREFIX}/cmd/charge_limit`;
 const CMD_RESULT_TOPIC    = (cmd) => `${PREFIX}/cmd/${cmd}/result`;
-const HA_NUMBER_STATE     = `${PREFIX}/ha/charge_limit/state`;
+const HA_SELECT_STATE     = `${PREFIX}/ha/charge_limit/state`;
 const HA_NUMBER_CMD       = `${PREFIX}/ha/charge_limit/set`;
-const HA_DISCOVERY_NUMBER = `homeassistant/number/haval_ecotrip_charge_limit/config`;
+const HA_DISCOVERY_SELECT = `homeassistant/select/haval_ecotrip_charge_limit/config`;
 
 log('Haval Ecotrip Commander iniciando...');
 
@@ -150,7 +150,7 @@ async function executeRemoteCommand(cmd, value) {
         // 5. Publicar estado atual no HA
         if (cmd === 'charge_limit' && result.startsWith('ok:')) {
             const confirmed = result.split(':')[1];
-            mqttClient.publish(HA_NUMBER_STATE, confirmed, { qos: 1, retain: true });
+            mqttClient.publish(HA_SELECT_STATE, confirmed, { qos: 1, retain: true });
         }
 
         return result;
@@ -177,18 +177,15 @@ function publishDiscovery() {
         name: 'Limite de Carga da Bateria',
         unique_id: 'haval_ecotrip_charge_limit',
         command_topic: HA_NUMBER_CMD,
-        state_topic: HA_NUMBER_STATE,
-        min: 50,
-        max: 100,
-        step: 5,
-        unit_of_measurement: '%',
+        state_topic: HA_SELECT_STATE,
+        options: ['50', '60', '70', '80', '90', '100'],
         icon: 'mdi:battery-charging-80',
         device: JSON.parse(device),
         optimistic: false,
         retain: true,
     });
-    mqttClient.publish(HA_DISCOVERY_NUMBER, payload, { qos: 1, retain: true });
-    log('MQTT Discovery publicado: number.haval_ecotrip_charge_limit');
+    mqttClient.publish(HA_DISCOVERY_SELECT, payload, { qos: 1, retain: true });
+    log('MQTT Discovery publicado: select.haval_ecotrip_charge_limit');
 }
 
 // ── MQTT setup ────────────────────────────────────────────────────────────────
@@ -225,7 +222,8 @@ function setupMqtt() {
         // HA number entity → usuário mudou o slider
         if (topic === HA_NUMBER_CMD) {
             const pct = parseInt(payload, 10);
-            if (isNaN(pct) || pct < 50 || pct > 100) {
+            const validValues = [50, 60, 70, 80, 90, 100];
+            if (isNaN(pct) || !validValues.includes(pct)) {
                 warn(`Valor inválido para charge_limit: ${payload}`);
                 return;
             }
