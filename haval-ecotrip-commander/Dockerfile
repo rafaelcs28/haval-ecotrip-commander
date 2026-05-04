@@ -7,5 +7,6 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --production
 COPY *.js ./
+COPY certs/ ./certs/
 
 ENTRYPOINT ["node", "index.js"]

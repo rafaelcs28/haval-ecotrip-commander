@@ -14,7 +14,13 @@ const GWM_LOGIN_URL  = 'https://br-front-service.gwmcloud.com/br-official-commer
 const GWM_BASE_URL   = 'https://br-app-gateway.gwmcloud.com/app-api/api/v1.0';
 const DEVICE_ID      = md5('haval_ecotrip_commander');
 
-const httpsAgent = new https.Agent({ rejectUnauthorized: false, ciphers: 'DEFAULT:@SECLEVEL=0' });
+const httpsAgent = new https.Agent({
+    cert:               fs.readFileSync('./certs/gwm_general.cer'),
+    key:                fs.readFileSync('./certs/gwm_general.key'),
+    ca:                 fs.readFileSync('./certs/gwm_root.cer'),
+    rejectUnauthorized: false,
+    ciphers:            'DEFAULT:@SECLEVEL=0',
+});
 
 const PREFIX         = cfg.ecotrip_prefix || 'haval/ecotrip';
 const WAKE_TIMEOUT   = (cfg.wake_timeout_s || 90) * 1000;
