@@ -1,0 +1,2 @@
+#!/usr/bin/with-contenv bashio
+exec node /app/index.js
