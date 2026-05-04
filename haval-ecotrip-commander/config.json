@@ -1,6 +1,6 @@
 {
   "name": "Haval Ecotrip Commander",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "slug": "haval_ecotrip_commander",
   "description": "Envia comandos remotos ao Haval via GWM API + Ecotrip MQTT (ex: limite de carga da bateria)",
   "arch": ["aarch64", "amd64", "armhf", "armv7", "i386"],

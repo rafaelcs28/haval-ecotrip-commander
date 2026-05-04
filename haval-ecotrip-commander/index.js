@@ -124,7 +124,8 @@ async function sendGwmCommand(instructions) {
     log(`GWM sendCmd seqNo=${seqNo}`);
     const res = await axios.post(`${GWM_BASE_URL}/vehicle/T5/sendCmd`, body,
         { headers: appHeaders(at, rt), httpsAgent });
-    if (res.data?.code !== '0' && res.data?.returnCode !== '0') {
+    const code = res.data?.code ?? res.data?.returnCode ?? '';
+    if (code !== '0' && code !== '000000') {
         throw new Error(`GWM sendCmd erro: ${JSON.stringify(res.data)}`);
     }
     return seqNo;
