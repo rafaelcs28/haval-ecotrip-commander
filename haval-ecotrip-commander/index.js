@@ -110,19 +110,18 @@ function appHeaders(at, rt) {
 }
 
 // ── GWM Commands ──────────────────────────────────────────────────────────────
-async function sendGwmCommand(serviceCode, instructions) {
+async function sendGwmCommand(instructions) {
     const { accessToken: at, refreshToken: rt } = await getTokens();
     const seqNo = makeSeqNo();
     const body  = {
-        vin:              cfg.gwm_vin.toUpperCase(),
+        instructions,
+        remoteType:       0,
         securityPassword: md5(cfg.gwm_pin),
         seqNo,
-        serviceCode,
-        instructions,
         type:             2,
-        remoteType:       0,
+        vin:              cfg.gwm_vin.toUpperCase(),
     };
-    log(`GWM sendCmd serviceCode=${serviceCode} seqNo=${seqNo}`);
+    log(`GWM sendCmd seqNo=${seqNo}`);
     const res = await axios.post(`${GWM_BASE_URL}/vehicle/T5/sendCmd`, body,
         { headers: appHeaders(at, rt), httpsAgent });
     if (res.data?.code !== '0' && res.data?.returnCode !== '0') {
@@ -133,13 +132,13 @@ async function sendGwmCommand(serviceCode, instructions) {
 
 async function engineOn() {
     log('Ligando motor remotamente (engineOn)...');
-    await sendGwmCommand('0x03', [{ name: 'powerMode', value: '1' }]);
+    await sendGwmCommand({ '0x03': { operationTime: '15', switchOrder: '1' } });
 }
 
 async function engineOff() {
     log('Desligando motor remotamente (engineOff)...');
     try {
-        await sendGwmCommand('0x03', [{ name: 'powerMode', value: '2' }]);
+        await sendGwmCommand({ '0x03': { operationTime: '15', switchOrder: '2' } });
     } catch (e) {
         warn(`engineOff ignorado: ${e.message}`);
     }
