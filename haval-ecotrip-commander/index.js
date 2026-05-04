@@ -227,6 +227,9 @@ function publishDiscovery() {
     });
     mqttClient.publish(HA_DISCOVERY_SELECT, payload, { qos: 1, retain: true });
     log('MQTT Discovery publicado: select.haval_ecotrip_charge_limit');
+
+    // Remove legacy number entity
+    mqttClient.publish('homeassistant/number/haval_ecotrip_charge_limit/config', '', { qos: 1, retain: true });
 }
 
 // ── MQTT setup ────────────────────────────────────────────────────────────────
