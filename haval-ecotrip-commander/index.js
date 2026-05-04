@@ -1,9 +1,10 @@
 'use strict';
 
-const axios = require('axios');
-const mqtt  = require('mqtt');
-const md5   = require('md5');
-const fs    = require('fs');
+const axios  = require('axios');
+const mqtt   = require('mqtt');
+const md5    = require('md5');
+const fs     = require('fs');
+const https  = require('https');
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const OPTIONS_FILE = '/data/options.json';
@@ -11,7 +12,9 @@ const cfg = JSON.parse(fs.readFileSync(OPTIONS_FILE, 'utf8'));
 
 const GWM_LOGIN_URL  = 'https://br-front-service.gwmcloud.com/br-official-commerce/br-official-gateway/pc-api/api/v1.0/userAuth/loginAccount';
 const GWM_BASE_URL   = 'https://br-app-gateway.gwmcloud.com/app-api/api/v1.0';
-const DEVICE_ID      = 'haval_ecotrip_commander';
+const DEVICE_ID      = md5('haval_ecotrip_commander');
+
+const httpsAgent = new https.Agent({ rejectUnauthorized: false, ciphers: 'DEFAULT:@SECLEVEL=0' });
 
 const PREFIX         = cfg.ecotrip_prefix || 'haval/ecotrip';
 const WAKE_TIMEOUT   = (cfg.wake_timeout_s || 90) * 1000;
@@ -28,11 +31,12 @@ const HA_DISCOVERY_SELECT = `homeassistant/select/haval_ecotrip_charge_limit/con
 log('Haval Ecotrip Commander iniciando...');
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let gwmToken     = null;
-let tokenExpiry  = 0;
-let mqttClient   = null;
+let accessToken   = null;
+let refreshToken  = null;
+let tokenExpiry   = 0;
+let mqttClient    = null;
 let ecotripOnline = false;
-let pendingCmd   = null;   // { cmd, value, resolve, reject }
+let pendingCmd    = null;   // { cmd, value, resolve, reject }
 
 // ── Logging ──────────────────────────────────────────────────────────────────
 function log(msg)  { console.log(`[INFO]  ${new Date().toISOString()} ${msg}`); }
@@ -40,45 +44,76 @@ function warn(msg) { console.log(`[WARN]  ${new Date().toISOString()} ${msg}`); 
 function err(msg)  { console.error(`[ERROR] ${new Date().toISOString()} ${msg}`); }
 
 // ── GWM Auth ─────────────────────────────────────────────────────────────────
-async function getToken() {
-    if (gwmToken && Date.now() < tokenExpiry) return gwmToken;
+const LOGIN_HEADERS = {
+    'Content-Type':  'application/json',
+    'appid':         '6',
+    'brand':         '6',
+    'brandid':       'CCZ001',
+    'country':       'BR',
+    'devicetype':    '0',
+    'enterpriseid':  'CC01',
+    'gwid':          '',
+    'language':      'pt_BR',
+    'rs':            '5',
+    'terminal':      'GW_PC_GWM',
+};
+
+async function getTokens() {
+    if (accessToken && Date.now() < tokenExpiry) return { accessToken, refreshToken };
     log('Autenticando na GWM API...');
     const res = await axios.post(GWM_LOGIN_URL, {
-        loginAccount: cfg.gwm_username,
-        loginPassword: md5(cfg.gwm_password),
-        loginType: '0',
-        deviceId: DEVICE_ID,
-    }, { headers: { 'Content-Type': 'application/json' } });
+        account:  cfg.gwm_username,
+        password: md5(cfg.gwm_password),
+        deviceid: DEVICE_ID,
+    }, { headers: LOGIN_HEADERS, httpsAgent });
 
-    if (!res.data?.data?.token) throw new Error('GWM login falhou: ' + JSON.stringify(res.data));
-    gwmToken   = res.data.data.token;
-    tokenExpiry = Date.now() + 25 * 60 * 1000; // 25 min
+    if (res.data?.description !== 'SUCCESS' || !res.data?.data?.accessToken) {
+        throw new Error('GWM login falhou: ' + JSON.stringify(res.data));
+    }
+    accessToken  = res.data.data.accessToken;
+    refreshToken = res.data.data.refreshToken;
+    // Parse JWT exp claim for accurate expiry
+    try {
+        const payload = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString());
+        tokenExpiry = payload.exp ? payload.exp * 1000 - 60000 : Date.now() + 25 * 60 * 1000;
+    } catch (_) {
+        tokenExpiry = Date.now() + 25 * 60 * 1000;
+    }
     log('Autenticado na GWM API.');
-    return gwmToken;
+    return { accessToken, refreshToken };
 }
 
-function gwmHeaders(token) {
+function appHeaders(at, rt) {
     return {
-        'Content-Type': 'application/json',
-        'token': token,
-        'vin': cfg.gwm_vin,
+        'Content-Type':  'application/json',
+        'rs':            '2',
+        'terminal':      'GW_APP_GWM',
+        'brand':         '6',
+        'language':      'pt_BR',
+        'systemtype':    '2',
+        'regioncode':    'BR',
+        'country':       'BR',
+        'accessToken':   at,
+        'refreshToken':  rt,
     };
 }
 
 // ── GWM Commands ──────────────────────────────────────────────────────────────
 async function sendGwmCommand(serviceCode, instructions) {
-    const token = await getToken();
+    const { accessToken: at, refreshToken: rt } = await getTokens();
     const seqNo = `${Date.now()}${Math.floor(Math.random() * 9000 + 1000)}`;
     const body  = {
-        vin: cfg.gwm_vin,
-        pin: md5(cfg.gwm_pin),
+        vin:              cfg.gwm_vin,
+        securityPassword: md5(cfg.gwm_pin),
         seqNo,
         serviceCode,
         instructions,
+        type:             2,
+        remoteType:       0,
     };
     log(`GWM sendCmd serviceCode=${serviceCode} seqNo=${seqNo}`);
     const res = await axios.post(`${GWM_BASE_URL}/vehicle/T5/sendCmd`, body,
-        { headers: gwmHeaders(token) });
+        { headers: appHeaders(at, rt), httpsAgent });
     if (res.data?.code !== '0' && res.data?.returnCode !== '0') {
         throw new Error(`GWM sendCmd erro: ${JSON.stringify(res.data)}`);
     }
