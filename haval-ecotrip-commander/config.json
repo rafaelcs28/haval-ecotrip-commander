@@ -30,5 +30,6 @@
     "wake_timeout_s": "int",
     "cmd_timeout_s": "int"
   },
-  "map": []
+  "map": [],
+  "init": false
 }
