@@ -14,6 +14,11 @@ const GWM_LOGIN_URL  = 'https://br-front-service.gwmcloud.com/br-official-commer
 const GWM_BASE_URL   = 'https://br-app-gateway.gwmcloud.com/app-api/api/v1.0';
 const DEVICE_ID      = md5('haval_ecotrip_commander');
 
+function makeSeqNo() {
+    return 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'.replace(/x/g, () =>
+        Math.floor(Math.random() * 16).toString(16)) + '1234';
+}
+
 const httpsAgent = new https.Agent({
     cert:               fs.readFileSync('./certs/gwm_general.cer'),
     key:                fs.readFileSync('./certs/gwm_general.key'),
@@ -107,7 +112,7 @@ function appHeaders(at, rt) {
 // ── GWM Commands ──────────────────────────────────────────────────────────────
 async function sendGwmCommand(serviceCode, instructions) {
     const { accessToken: at, refreshToken: rt } = await getTokens();
-    const seqNo = `${Date.now()}${Math.floor(Math.random() * 9000 + 1000)}`;
+    const seqNo = makeSeqNo();
     const body  = {
         vin:              cfg.gwm_vin,
         securityPassword: md5(cfg.gwm_pin),
