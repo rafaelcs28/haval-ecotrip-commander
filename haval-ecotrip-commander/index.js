@@ -226,7 +226,7 @@ function publishDiscovery() {
         unique_id: 'haval_ecotrip_charge_limit',
         command_topic: HA_NUMBER_CMD,
         state_topic: HA_SELECT_STATE,
-        options: ['50', '60', '70', '80', '90', '100'],
+        options: ['50', '60', '70', '80', '90'],
         icon: 'mdi:battery-charging-80',
         device: JSON.parse(device),
         optimistic: false,
@@ -293,7 +293,7 @@ function setupMqtt() {
                 return;
             }
             const pct = parseInt(payload, 10);
-            const validValues = [50, 60, 70, 80, 90, 100];
+            const validValues = [50, 60, 70, 80, 90]; // 100% não é suportado pelo ECU via API
             if (isNaN(pct) || !validValues.includes(pct)) {
                 warn(`Valor inválido para charge_limit: ${payload}`);
                 return;
