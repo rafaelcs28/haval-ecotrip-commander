@@ -274,6 +274,15 @@ function setupMqtt() {
             const prev = ecotripOnline;
             ecotripOnline = payload === 'online';
             if (ecotripOnline !== prev) log(`Ecotrip status: ${payload}`);
+            if (ecotripOnline && !prev) {
+                // EcotripImpulse acabou de conectar e pode ter publicado seu próprio discovery
+                // sobrescrevendo o command_topic do Commander. Republicamos após 2s para garantir
+                // que o command_topic correto (ha/charge_limit/set) vença a corrida.
+                setTimeout(() => {
+                    log('Republicando discovery para garantir command_topic correto...');
+                    publishDiscovery();
+                }, 2000);
+            }
             return;
         }
 
