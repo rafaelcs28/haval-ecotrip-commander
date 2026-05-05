@@ -42,12 +42,14 @@ const HA_DISCOVERY_SELECT = `homeassistant/select/haval_ecotrip_charge_limit/con
 log('Haval Ecotrip Commander iniciando...');
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let accessToken   = null;
-let refreshToken  = null;
-let tokenExpiry   = 0;
-let mqttClient    = null;
-let ecotripOnline = false;
-let pendingCmd    = null;   // { cmd, value, resolve, reject }
+let accessToken    = null;
+let refreshToken   = null;
+let tokenExpiry    = 0;
+let mqttClient     = null;
+let ecotripOnline  = false;
+let pendingCmd     = null;   // { cmd, value, resolve, reject }
+let commanderReady = false;  // ignora mensagens retidas nos primeiros segundos após conectar
+let cmdInProgress  = false;  // evita execuções paralelas do mesmo comando
 
 // ── Logging ──────────────────────────────────────────────────────────────────
 function log(msg)  { console.log(`[INFO]  ${new Date().toISOString()} ${msg}`); }
@@ -249,12 +251,19 @@ function setupMqtt() {
 
     mqttClient.on('connect', () => {
         log('MQTT conectado.');
+        commanderReady = false;  // bloqueia comandos retidos até estar estável
+        cmdInProgress  = false;
         mqttClient.publish('haval/ecotrip-commander/status', 'online', { qos: 1, retain: true });
         mqttClient.subscribe(STATUS_TOPIC,    { qos: 1 });
         mqttClient.subscribe(HA_NUMBER_CMD,   { qos: 1 });
         // Subscribe result topics to resolve pending promises
         mqttClient.subscribe(`${PREFIX}/cmd/+/result`, { qos: 1 });
         publishDiscovery();
+        // Aguarda 3s para descartar mensagens retidas entregues logo após o subscribe
+        setTimeout(() => {
+            commanderReady = true;
+            log('Commander pronto para receber comandos.');
+        }, 3000);
     });
 
     mqttClient.on('message', (topic, message) => {
@@ -268,16 +277,27 @@ function setupMqtt() {
             return;
         }
 
-        // HA number entity → usuário mudou o slider
+        // HA select entity → usuário mudou o limite de carga
         if (topic === HA_NUMBER_CMD) {
+            if (!commanderReady) {
+                warn(`Ignorando mensagem retida no startup: charge_limit=${payload}`);
+                return;
+            }
             const pct = parseInt(payload, 10);
             const validValues = [50, 60, 70, 80, 90, 100];
             if (isNaN(pct) || !validValues.includes(pct)) {
                 warn(`Valor inválido para charge_limit: ${payload}`);
                 return;
             }
+            if (cmdInProgress) {
+                warn(`Comando já em andamento — ignorando charge_limit=${pct}`);
+                return;
+            }
             log(`HA solicitou charge_limit=${pct}%`);
-            executeRemoteCommand('charge_limit', pct).catch(e => err(e.message));
+            cmdInProgress = true;
+            executeRemoteCommand('charge_limit', pct)
+                .catch(e => err(e.message))
+                .finally(() => { cmdInProgress = false; });
             return;
         }
 
