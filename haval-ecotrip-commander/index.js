@@ -179,17 +179,23 @@ function sendEcotripCommand(cmd, value, timeoutMs) {
 // ── Main command orchestrator ─────────────────────────────────────────────────
 async function executeRemoteCommand(cmd, value) {
     log(`=== Executando comando remoto: ${cmd}=${value} ===`);
+    // Remember if Ecotrip was already running so we don't turn the car off after
+    const wasAlreadyOnline = ecotripOnline;
     try {
-        // 1. Acordar o carro
-        await engineOn();
+        if (wasAlreadyOnline) {
+            log('Ecotrip já está online — enviando comando diretamente (sem ligar/desligar motor).');
+        } else {
+            // 1. Acordar o carro (somente se Ecotrip não estava online)
+            await engineOn();
 
-        // 2. Aguardar Ecotrip ficar online
-        log(`Aguardando Ecotrip online (timeout ${WAKE_TIMEOUT / 1000}s)...`);
-        await waitEcotripOnline(WAKE_TIMEOUT);
-        log('Ecotrip online!');
+            // 2. Aguardar Ecotrip ficar online
+            log(`Aguardando Ecotrip online (timeout ${WAKE_TIMEOUT / 1000}s)...`);
+            await waitEcotripOnline(WAKE_TIMEOUT);
+            log('Ecotrip online!');
 
-        // 3. Dar um tempo extra para o serviço do carro estabilizar
-        await new Promise(r => setTimeout(r, 5000));
+            // 3. Dar um tempo extra para o serviço do carro estabilizar
+            await new Promise(r => setTimeout(r, 5000));
+        }
 
         // 4. Enviar comando via MQTT
         const result = await sendEcotripCommand(cmd, value, CMD_TIMEOUT);
@@ -206,10 +212,13 @@ async function executeRemoteCommand(cmd, value) {
         err(`Falha no comando remoto ${cmd}: ${e.message}`);
         throw e;
     } finally {
-        // 6. Desligar o carro após 10s (tempo de o ECU gravar a config)
-        log('Aguardando 10s antes de desligar o motor...');
-        await new Promise(r => setTimeout(r, 10000));
-        await engineOff();
+        if (!wasAlreadyOnline) {
+            // 6. Desligar o carro após 10s (tempo de o ECU gravar a config)
+            //    Apenas se fomos NÓS que ligamos — nunca desligar um carro que já estava em uso!
+            log('Aguardando 10s antes de desligar o motor...');
+            await new Promise(r => setTimeout(r, 10000));
+            await engineOff();
+        }
         log('=== Comando remoto finalizado ===');
     }
 }
