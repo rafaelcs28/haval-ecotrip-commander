@@ -42,14 +42,15 @@ const HA_DISCOVERY_SELECT = `homeassistant/select/haval_ecotrip_charge_limit/con
 log('Haval Ecotrip Commander iniciando...');
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let accessToken    = null;
-let refreshToken   = null;
-let tokenExpiry    = 0;
-let mqttClient     = null;
-let ecotripOnline  = false;
-let pendingCmd     = null;   // { cmd, value, resolve, reject }
-let commanderReady = false;  // ignora mensagens retidas nos primeiros segundos após conectar
-let cmdInProgress  = false;  // evita execuções paralelas do mesmo comando
+let accessToken          = null;
+let refreshToken         = null;
+let tokenExpiry          = 0;
+let mqttClient           = null;
+let ecotripOnline        = false;
+let pendingCmd           = null;   // { cmd, value, resolve, reject }
+let commanderReady       = false;  // ignora mensagens retidas nos primeiros segundos após conectar
+let cmdInProgress        = false;  // evita execuções paralelas do mesmo comando
+let engineStartedByUs    = false;  // true enquanto fomos nós quem ligou o motor — garante desligamento
 
 // ── Logging ──────────────────────────────────────────────────────────────────
 function log(msg)  { console.log(`[INFO]  ${new Date().toISOString()} ${msg}`); }
@@ -136,16 +137,49 @@ async function sendGwmCommand(instructions) {
 async function engineOn() {
     log('Ligando motor remotamente (engineOn)...');
     await sendGwmCommand({ '0x03': { operationTime: '15', switchOrder: '1' } });
+    engineStartedByUs = true;  // marca que fomos nós quem ligou
 }
 
 async function engineOff() {
     log('Desligando motor remotamente (engineOff)...');
-    try {
-        await sendGwmCommand({ '0x03': { operationTime: '15', switchOrder: '2' } });
-    } catch (e) {
-        warn(`engineOff ignorado: ${e.message}`);
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+            await sendGwmCommand({ '0x03': { operationTime: '15', switchOrder: '2' } });
+            engineStartedByUs = false;  // desligou com sucesso
+            log('Motor desligado com sucesso.');
+            return;
+        } catch (e) {
+            if (attempt < MAX_ATTEMPTS) {
+                warn(`engineOff tentativa ${attempt}/${MAX_ATTEMPTS} falhou: ${e.message} — tentando novamente em 5s...`);
+                await new Promise(r => setTimeout(r, 5000));
+            } else {
+                err(`engineOff falhou após ${MAX_ATTEMPTS} tentativas: ${e.message}`);
+                // engineStartedByUs permanece true para que handlers de saída tentem novamente
+            }
+        }
     }
 }
+
+// ── Garante desligamento do motor em qualquer saída do processo ───────────────
+async function ensureEngineOff(signal) {
+    if (!engineStartedByUs) return;
+    warn(`[${signal}] Processo encerrando com motor ativo — tentando desligar...`);
+    await engineOff();
+}
+
+process.on('SIGTERM', async () => { await ensureEngineOff('SIGTERM'); process.exit(0); });
+process.on('SIGINT',  async () => { await ensureEngineOff('SIGINT');  process.exit(0); });
+process.on('uncaughtException', async (e) => {
+    err(`Exceção não tratada: ${e.message}`);
+    await ensureEngineOff('uncaughtException');
+    process.exit(1);
+});
+process.on('unhandledRejection', async (reason) => {
+    err(`Promise rejeitada não tratada: ${reason}`);
+    await ensureEngineOff('unhandledRejection');
+    process.exit(1);
+});
 
 // ── Wait for Ecotrip online ───────────────────────────────────────────────────
 function waitEcotripOnline(timeoutMs) {
@@ -179,14 +213,14 @@ function sendEcotripCommand(cmd, value, timeoutMs) {
 // ── Main command orchestrator ─────────────────────────────────────────────────
 async function executeRemoteCommand(cmd, value) {
     log(`=== Executando comando remoto: ${cmd}=${value} ===`);
-    // Remember if Ecotrip was already running so we don't turn the car off after
-    const wasAlreadyOnline = ecotripOnline;
+    // Se Ecotrip já está online (carro em uso), envia direto — nunca ligar/desligar o motor
+    const needWake = !ecotripOnline;
     try {
-        if (wasAlreadyOnline) {
+        if (!needWake) {
             log('Ecotrip já está online — enviando comando diretamente (sem ligar/desligar motor).');
         } else {
-            // 1. Acordar o carro (somente se Ecotrip não estava online)
-            await engineOn();
+            // 1. Acordar o carro
+            await engineOn();  // sets engineStartedByUs = true
 
             // 2. Aguardar Ecotrip ficar online
             log(`Aguardando Ecotrip online (timeout ${WAKE_TIMEOUT / 1000}s)...`);
@@ -212,12 +246,12 @@ async function executeRemoteCommand(cmd, value) {
         err(`Falha no comando remoto ${cmd}: ${e.message}`);
         throw e;
     } finally {
-        if (!wasAlreadyOnline) {
+        if (needWake) {
             // 6. Desligar o carro após 10s (tempo de o ECU gravar a config)
-            //    Apenas se fomos NÓS que ligamos — nunca desligar um carro que já estava em uso!
+            //    Sempre tenta, mesmo em caso de erro — engineOff tem retry interno (3x)
             log('Aguardando 10s antes de desligar o motor...');
             await new Promise(r => setTimeout(r, 10000));
-            await engineOff();
+            await engineOff();  // sets engineStartedByUs = false on success
         }
         log('=== Comando remoto finalizado ===');
     }
