@@ -47,6 +47,7 @@ let refreshToken         = null;
 let tokenExpiry          = 0;
 let mqttClient           = null;
 let ecotripOnline        = false;
+let offlineDebounceTimer = null;   // debounce: evita marcar offline em reconexões rápidas
 let pendingCmd           = null;   // { cmd, value, resolve, reject }
 let commanderReady       = false;  // ignora mensagens retidas nos primeiros segundos após conectar
 let cmdInProgress        = false;  // evita execuções paralelas do mesmo comando
@@ -213,6 +214,12 @@ function sendEcotripCommand(cmd, value, timeoutMs) {
 // ── Main command orchestrator ─────────────────────────────────────────────────
 async function executeRemoteCommand(cmd, value) {
     log(`=== Executando comando remoto: ${cmd}=${value} ===`);
+    // Se aparentemente offline, aguarda 8s para mensagens de status em trânsito chegarem.
+    // Evita acordar o carro por um race condition de reconexão rápida do MQTT.
+    if (!ecotripOnline) {
+        log('Ecotrip aparentemente offline — aguardando 8s por possível atualização de status...');
+        await new Promise(r => setTimeout(r, 8000));
+    }
     // Se Ecotrip já está online (carro em uso), envia direto — nunca ligar/desligar o motor
     const needWake = !ecotripOnline;
     try {
@@ -314,17 +321,34 @@ function setupMqtt() {
 
         // Ecotrip online/offline status
         if (topic === STATUS_TOPIC) {
-            const prev = ecotripOnline;
-            ecotripOnline = payload === 'online';
-            if (ecotripOnline !== prev) log(`Ecotrip status: ${payload}`);
-            if (ecotripOnline && !prev) {
-                // EcotripImpulse acabou de conectar e pode ter publicado seu próprio discovery
-                // sobrescrevendo o command_topic do Commander. Republicamos após 2s para garantir
-                // que o command_topic correto (ha/charge_limit/set) vença a corrida.
-                setTimeout(() => {
-                    log('Republicando discovery para garantir command_topic correto...');
-                    publishDiscovery();
-                }, 2000);
+            const isOnline = payload === 'online';
+            if (isOnline) {
+                // Online imediato — cancela qualquer debounce de offline pendente
+                if (offlineDebounceTimer) {
+                    clearTimeout(offlineDebounceTimer);
+                    offlineDebounceTimer = null;
+                }
+                if (!ecotripOnline) {
+                    ecotripOnline = true;
+                    log('Ecotrip status: online');
+                    // EcotripImpulse acabou de conectar e pode ter publicado seu próprio discovery
+                    // sobrescrevendo o command_topic do Commander. Republicamos após 2s para garantir
+                    // que o command_topic correto (ha/charge_limit/set) vença a corrida.
+                    setTimeout(() => {
+                        log('Republicando discovery para garantir command_topic correto...');
+                        publishDiscovery();
+                    }, 2000);
+                }
+            } else {
+                // Offline com debounce de 10s — reconexões rápidas não alteram o estado
+                if (offlineDebounceTimer) clearTimeout(offlineDebounceTimer);
+                offlineDebounceTimer = setTimeout(() => {
+                    offlineDebounceTimer = null;
+                    if (ecotripOnline) {
+                        ecotripOnline = false;
+                        log('Ecotrip status: offline');
+                    }
+                }, 10000);
             }
             return;
         }
