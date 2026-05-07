@@ -1,0 +1,58 @@
+##############################################################################
+# Haval Ecotrip — Helpers (Entidades auxiliares para o dashboard)
+#
+# COMO ADICIONAR AO HOME ASSISTANT:
+#
+# Opção A — Via UI (mais fácil, recomendado):
+#   Configurações > Dispositivos e Serviços > Auxiliares > + Criar auxiliar
+#   Criar cada um conforme listado abaixo.
+#
+# Opção B — Via configuration.yaml (modo YAML):
+#   Cole o conteúdo abaixo diretamente no seu configuration.yaml,
+#   ou crie um arquivo separado e inclua com:
+#     homeassistant:
+#       packages:
+#         ecotrip: !include packages/ecotrip_helpers.yaml
+#
+##############################################################################
+
+input_select:
+  ecotrip_periodo:
+    name: "Ecotrip — Período dos gráficos"
+    icon: mdi:calendar-range
+    options:
+      - "Últimas 24h"
+      - "Últimos 7 dias"
+      - "Últimos 15 dias"
+      - "Últimos 30 dias"
+      - "Personalizado"
+    initial: "Últimos 7 dias"
+
+input_datetime:
+  ecotrip_data_inicio:
+    name: "Ecotrip — Data início"
+    icon: mdi:calendar-start
+    has_date: true
+    has_time: true
+
+  ecotrip_data_fim:
+    name: "Ecotrip — Data fim"
+    icon: mdi:calendar-end
+    has_date: true
+    has_time: true
+
+# ── Auxiliares para sessão de recarga em andamento ───────────────────────────
+input_number:
+  ecotrip_charging_start_soc:
+    name: "Ecotrip — SOC início de recarga"
+    icon: mdi:battery-charging
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+
+input_text:
+  ecotrip_charging_start_time:
+    name: "Ecotrip — Timestamp início de recarga"
+    icon: mdi:clock-start
+    max: 50

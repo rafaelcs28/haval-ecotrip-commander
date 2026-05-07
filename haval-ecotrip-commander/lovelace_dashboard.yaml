@@ -1,0 +1,1054 @@
+##############################################################################
+# Haval Ecotrip — Dashboard Lovelace
+#
+# Como usar:
+#   1. No HA, vá em Configurações > Dashboards > + Adicionar dashboard
+#      Escolha "Dashboard manual (YAML)" e cole o conteúdo deste arquivo.
+#   2. OU adicione em configuration.yaml:
+#        lovelace:
+#          dashboards:
+#            ecotrip:
+#              mode: yaml
+#              filename: /config/ecotrip_dashboard.yaml
+#              title: Ecotrip
+#              icon: mdi:car-electric
+#
+# ⚠️  IDs de entidade: o HA gera automaticamente com base no nome do sensor.
+#     Se os sensores não aparecerem, vá em Configurações > Dispositivos >
+#     Haval Ecotrip e copie os entity_ids reais.
+#     Padrão esperado: sensor.haval_ecotrip_<slug_do_nome>
+##############################################################################
+
+title: Haval Ecotrip
+views:
+
+  ##########################################################################
+  # VIEW 1 — TEMPO REAL
+  ##########################################################################
+  - title: Tempo Real
+    path: ecotrip-realtime
+    icon: mdi:car-electric
+    cards:
+
+      # ── Cabeçalho ─────────────────────────────────────────────────────────
+      - type: markdown
+        content: >
+          <div style="display:flex; align-items:center; gap:12px; padding:4px 0">
+          <ha-icon icon="mdi:car-electric" style="color:#30D158; --mdc-icon-size:28px"></ha-icon>
+          <span style="font-size:1.35em; font-weight:700; color:#30D158; letter-spacing:0.03em">Haval Ecotrip Impulse</span>
+          <span style="color:#8E8E93; font-size:0.82em; margin-left:auto">{{ relative_time(states.sensor.haval_ecotrip_rolling_distancia.last_updated) }} atrás</span>
+          </div>
+
+      # ── DESDE ÚLTIMA PARTIDA — Gauges principais ─────────────────────────
+      - type: markdown
+        content: >
+          <span style="font-size:0.75em; font-weight:700; letter-spacing:0.12em; color:#636366; text-transform:uppercase">⏱ Desde Última Partida</span>
+
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.haval_ecotrip_rolling_kwh_100km
+            name: kWh/100km
+            unit: kWh/100km
+            min: 0
+            max: 40
+            needle: true
+            severity:
+              green: 0
+              yellow: 20
+              red: 30
+
+          - type: gauge
+            entity: sensor.haval_ecotrip_rolling_km_l
+            name: km/L
+            unit: km/L
+            min: 0
+            max: 50
+            needle: true
+            severity:
+              green: 20
+              yellow: 10
+              red: 0
+
+      - type: glance
+        show_name: true
+        show_icon: true
+        show_state: true
+        entities:
+          - entity: sensor.haval_ecotrip_rolling_distancia
+            name: Distância
+            icon: mdi:road-variant
+          - entity: sensor.haval_ecotrip_rolling_combustivel
+            name: Combustível gasto
+            icon: mdi:fuel
+
+      # ── TRIPS A e B — Gauges principais ───────────────────────────────────
+      - type: markdown
+        content: >
+          <span style="font-size:0.75em; font-weight:700; letter-spacing:0.12em; color:#636366; text-transform:uppercase">🏁 Trip A &amp; Trip B</span>
+
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.haval_ecotrip_trip_a_kwh_100km
+            name: A kWh/100km
+            min: 0
+            max: 40
+            needle: true
+            severity:
+              green: 0
+              yellow: 20
+              red: 30
+
+          - type: gauge
+            entity: sensor.haval_ecotrip_trip_a_km_l
+            name: A km/L
+            min: 0
+            max: 30
+            needle: true
+            severity:
+              green: 15
+              yellow: 10
+              red: 0
+
+          - type: gauge
+            entity: sensor.haval_ecotrip_trip_b_kwh_100km
+            name: B kWh/100km
+            min: 0
+            max: 40
+            needle: true
+            severity:
+              green: 0
+              yellow: 20
+              red: 30
+
+          - type: gauge
+            entity: sensor.haval_ecotrip_trip_b_km_l
+            name: B km/L
+            min: 0
+            max: 30
+            needle: true
+            severity:
+              green: 15
+              yellow: 10
+              red: 0
+
+      # ── SOC Bateria ───────────────────────────────────────────────────────
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.haval_ecotrip_trip_a_soc_atual
+            name: SOC A
+            unit: "%"
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              green: 60
+              yellow: 30
+              red: 0
+
+          - type: gauge
+            entity: sensor.haval_ecotrip_trip_b_soc_atual
+            name: SOC B
+            unit: "%"
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              green: 60
+              yellow: 30
+              red: 0
+
+      - type: glance
+        show_name: true
+        show_icon: true
+        show_state: true
+        entities:
+          - entity: sensor.haval_ecotrip_trip_a_distancia
+            name: Distância A
+            icon: mdi:road-variant
+          - entity: sensor.haval_ecotrip_trip_b_distancia
+            name: Distância B
+            icon: mdi:road-variant
+
+      # ── Detalhes Trip A e B ────────────────────────────────────────────────
+      - type: horizontal-stack
+        cards:
+
+          # Trip A — detalhes
+          - type: entities
+            title: 🏁 Trip A
+            show_header_toggle: false
+            entities:
+              - type: section
+                label: "⚡ Energia"
+              - entity: sensor.haval_ecotrip_trip_a_energia
+                name: Bruta
+                icon: mdi:flash
+              - entity: sensor.haval_ecotrip_trip_a_regenerada
+                name: Regenerada
+                icon: mdi:battery-charging-high
+              - entity: sensor.haval_ecotrip_trip_a_soc_inicio
+                name: SOC início
+                icon: mdi:battery-charging
+              - type: section
+                label: "⛽ Combustível"
+              - entity: sensor.haval_ecotrip_trip_a_combustivel
+                name: Gasto (L)
+                icon: mdi:fuel
+              - entity: sensor.haval_ecotrip_trip_a_tanque_inicio
+                name: Tanque início
+                icon: mdi:fuel
+              - entity: sensor.haval_ecotrip_trip_a_tanque_atual
+                name: Tanque atual
+                icon: mdi:fuel
+              - type: section
+                label: "📍 Viagem"
+              - entity: sensor.haval_ecotrip_trip_a_tempo
+                name: Tempo
+                icon: mdi:timer-outline
+              - entity: sensor.haval_ecotrip_trip_a_vel_media
+                name: Vel. média
+                icon: mdi:speedometer
+
+          # Trip B — detalhes
+          - type: entities
+            title: 🏁 Trip B
+            show_header_toggle: false
+            entities:
+              - type: section
+                label: "⚡ Energia"
+              - entity: sensor.haval_ecotrip_trip_b_energia
+                name: Bruta
+                icon: mdi:flash
+              - entity: sensor.haval_ecotrip_trip_b_regenerada
+                name: Regenerada
+                icon: mdi:battery-charging-high
+              - entity: sensor.haval_ecotrip_trip_b_soc_inicio
+                name: SOC início
+                icon: mdi:battery-charging
+              - type: section
+                label: "⛽ Combustível"
+              - entity: sensor.haval_ecotrip_trip_b_combustivel
+                name: Gasto (L)
+                icon: mdi:fuel
+              - entity: sensor.haval_ecotrip_trip_b_tanque_inicio
+                name: Tanque início
+                icon: mdi:fuel
+              - entity: sensor.haval_ecotrip_trip_b_tanque_atual
+                name: Tanque atual
+                icon: mdi:fuel
+              - type: section
+                label: "📍 Viagem"
+              - entity: sensor.haval_ecotrip_trip_b_tempo
+                name: Tempo
+                icon: mdi:timer-outline
+              - entity: sensor.haval_ecotrip_trip_b_vel_media
+                name: Vel. média
+                icon: mdi:speedometer
+
+      # ── Gráfico de tendência em tempo real ────────────────────────────────
+      - type: history-graph
+        title: 📈 Tendência — Consumo elétrico (últimas 2h)
+        hours_to_show: 2
+        entities:
+          - entity: sensor.haval_ecotrip_rolling_kwh_100km
+            name: Rolling kWh/100km
+          - entity: sensor.haval_ecotrip_trip_a_kwh_100km
+            name: Trip A kWh/100km
+          - entity: sensor.haval_ecotrip_trip_b_kwh_100km
+            name: Trip B kWh/100km
+
+      - type: history-graph
+        title: ⛽ Tendência — Rendimento combustível (últimas 2h)
+        hours_to_show: 2
+        entities:
+          - entity: sensor.haval_ecotrip_rolling_km_l
+            name: Rolling km/L
+          - entity: sensor.haval_ecotrip_trip_a_km_l
+            name: Trip A km/L
+          - entity: sensor.haval_ecotrip_trip_b_km_l
+            name: Trip B km/L
+
+      # ── Link para gráficos ────────────────────────────────────────────────
+      - type: markdown
+        content: >
+          📊 Ver gráficos detalhados com filtro de período → aba **Gráficos**
+
+  ##########################################################################
+  # VIEW 2 — RECARGA
+  ##########################################################################
+  - title: Recarga
+    path: ecotrip-recarga
+    icon: mdi:ev-station
+
+    cards:
+
+      # ── Status atual ──────────────────────────────────────────────────────
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.haval_ecotrip_potencia_de_recarga
+            name: Potência
+            unit: kW
+            min: 0
+            max: 11
+            needle: true
+            severity:
+              green: 6
+              yellow: 3
+              red: 0
+
+          - type: gauge
+            entity: sensor.haval_ecotrip_trip_a_soc_atual
+            name: SOC Bateria
+            unit: "%"
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              green: 60
+              yellow: 30
+              red: 0
+
+      - type: glance
+        show_name: true
+        show_icon: true
+        show_state: true
+        entities:
+          - entity: sensor.haval_ecotrip_estado_de_recarga
+            name: Estado
+            icon: mdi:ev-plug-type2
+          - entity: sensor.haval_ecotrip_corrente_de_carregamento
+            name: Corrente AC
+            icon: mdi:current-ac
+          - entity: sensor.haval_ecotrip_tensao_da_bateria
+            name: Tensão
+            icon: mdi:lightning-bolt
+          - entity: sensor.haval_ecotrip_corrente_da_bateria
+            name: Corrente bat.
+            icon: mdi:current-dc
+          - entity: sensor.haval_ecotrip_potencia_de_recarga
+            name: Potência
+            icon: mdi:ev-station
+
+      # ── Histórico de recarga (gráficos) ──────────────────────────────────
+      - type: history-graph
+        title: ⚡ Potência de recarga (últimas 8h)
+        hours_to_show: 8
+        entities:
+          - entity: sensor.haval_ecotrip_potencia_de_recarga
+            name: Potência (kW)
+
+      - type: history-graph
+        title: 🔋 SOC da bateria (últimas 8h)
+        hours_to_show: 8
+        entities:
+          - entity: sensor.haval_ecotrip_trip_a_soc_atual
+            name: SOC (%)
+
+      - type: history-graph
+        title: ⚡ Corrente e Tensão (últimas 8h)
+        hours_to_show: 8
+        entities:
+          - entity: sensor.haval_ecotrip_corrente_de_carregamento
+            name: Corrente AC (A)
+          - entity: sensor.haval_ecotrip_tensao_da_bateria
+            name: Tensão bat. (V)
+          - entity: sensor.haval_ecotrip_corrente_da_bateria
+            name: Corrente bat. (A)
+
+      # ── Tabela de sessões de recarga ──────────────────────────────────────
+      - type: markdown
+        content: >
+          <span style="font-size:0.75em; font-weight:700; letter-spacing:0.12em; color:#636366; text-transform:uppercase">🔌 Histórico de Recargas</span>
+
+      - type: custom:flex-table-card
+        title: Sessões de Recarga
+        entities:
+          include: sensor.haval_ecotrip_historico_de_recargas
+        columns:
+          - name: Data/Hora
+            data: attributes.sessions
+            modify: >
+              if (x && x.timestamp) {
+                const d = new Date(x.timestamp);
+                return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+              } return '-';
+          - name: SOC Início
+            data: attributes.sessions
+            modify: "x && x.soc_start !== undefined ? x.soc_start.toFixed(0) + '%' : '-'"
+          - name: SOC Fim
+            data: attributes.sessions
+            modify: "x && x.soc_end !== undefined ? x.soc_end.toFixed(0) + '%' : '-'"
+          - name: Δ SOC
+            data: attributes.sessions
+            modify: "x && x.soc_delta !== undefined ? '+' + x.soc_delta.toFixed(0) + '%' : '-'"
+          - name: Energia (kWh)
+            data: attributes.sessions
+            modify: "x && x.energy_kwh !== undefined ? x.energy_kwh.toFixed(1) : '-'"
+          - name: Duração
+            data: attributes.sessions
+            modify: >
+              if (x && x.duration_min !== undefined) {
+                const h = Math.floor(x.duration_min / 60);
+                const m = x.duration_min % 60;
+                return h > 0 ? h + 'h ' + m + 'min' : m + 'min';
+              } return '-';
+          - name: "🗑"
+            data: attributes.sessions
+            modify: >
+              x && x.timestamp ? '<button onclick="(function(){
+                var d=document;
+                var e=d.querySelector(\'home-assistant\');
+                var ha=e?e._hass:null;
+                if(ha){ha.callService(\'mqtt\',\'publish\',{topic:\'haval/ecotrip/cmd/delete_charging_session\',payload:\''+x.timestamp+'\'});}
+              })()">🗑</button>' : ''
+
+  ##########################################################################
+  # VIEW 3 — TABELA DE TRIPS SALVOS
+  #
+  # Requer custom:flex-table-card do HACS:
+  #   HACS → Frontend → Pesquisar "Flex Table Card" → Instalar
+  #   Depois reinicie o HA e recarregue o dashboard.
+  ##########################################################################
+  - title: Trips
+    path: ecotrip-trips
+    icon: mdi:table
+    panel: true
+
+    cards:
+
+      - type: custom:flex-table-card
+        title: Todos os Trips Salvos
+        strict: true
+        sort_by: timestamp
+        sort_descending: true
+        entities:
+          include: sensor.haval_ecotrip_historico_de_trips
+        columns:
+          - name: ""
+            attr_as_list: trips
+            modify: x.timestamp
+            button: true
+            button_label: "🗑"
+            action:
+              service: mqtt.publish
+              service_data:
+                topic: haval/ecotrip/cmd/delete_trip
+                payload: "[[col]]"
+          - name: Data/Hora
+            attr_as_list: trips
+            modify: >
+              new Date(x.timestamp).toLocaleDateString('pt-BR') + ' ' + new Date(x.timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})
+          - name: Nome da Viagem
+            attr_as_list: trips
+            modify: x.name || '—'
+          - name: Dist (km)
+            attr_as_list: trips
+            modify: parseFloat(x.distance_km || 0).toFixed(1)
+          - name: Energia (kWh)
+            attr_as_list: trips
+            modify: parseFloat(x.energy_kwh || 0).toFixed(2)
+          - name: Regen (kWh)
+            attr_as_list: trips
+            modify: parseFloat(x.regen_kwh || 0).toFixed(2)
+          - name: Líquido (kWh)
+            attr_as_list: trips
+            modify: parseFloat(x.net_kwh || 0).toFixed(2)
+          - name: Comb. (L)
+            attr_as_list: trips
+            modify: parseFloat(x.fuel_l || 0).toFixed(2)
+          - name: kWh/100km
+            attr_as_list: trips
+            modify: parseFloat(x.kwh_per_100km || 0).toFixed(2)
+          - name: km/L
+            attr_as_list: trips
+            modify: parseFloat(x.km_per_l || 0).toFixed(2)
+          - name: km/L comb.
+            attr_as_list: trips
+            modify: parseFloat(x.combined_km_l || 0).toFixed(2)
+
+
+  ##########################################################################
+  # VIEW 4 — HISTÓRICO DE VIAGENS SALVAS (última concluída de cada trip)
+  ##########################################################################
+  - title: Histórico
+    path: ecotrip-historico
+    icon: mdi:history
+
+    cards:
+
+      - type: markdown
+        content: >
+          ## 📋 Viagens Concluídas
+
+          Mostra a **última** viagem salva de cada trip.
+          Os dados vêm do tópico MQTT `haval/ecotrip/trip_x/last_completed`.
+
+      # ── Comparativo rápido: última viagem de cada trip ─────────────────────
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.haval_ecotrip_trip_a_concluida
+            name: Trip A — km concluídos
+            min: 0
+            max: 500
+            needle: true
+            severity:
+              green: 200
+              yellow: 50
+              red: 0
+
+          - type: gauge
+            entity: sensor.haval_ecotrip_trip_b_concluida
+            name: Trip B — km concluídos
+            min: 0
+            max: 500
+            needle: true
+            severity:
+              green: 200
+              yellow: 50
+              red: 0
+
+      # ── Última viagem Trip A ───────────────────────────────────────────────
+      - type: entities
+        title: 🏁 Última Viagem — Trip A
+        show_header_toggle: false
+        entities:
+          - entity: sensor.haval_ecotrip_trip_a_concluida
+            name: Distância
+            icon: mdi:road-variant
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_a_concluida
+            attribute: name
+            name: Nome da viagem
+            icon: mdi:tag-text
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_a_concluida
+            attribute: timestamp
+            name: Data/hora
+            icon: mdi:calendar-clock
+          - type: section
+            label: "⚡ Energia"
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_a_concluida
+            attribute: kwh_per_100km
+            name: kWh/100km
+            icon: mdi:lightning-bolt-circle
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_a_concluida
+            attribute: energy_kwh
+            name: Energia bruta (kWh)
+            icon: mdi:flash
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_a_concluida
+            attribute: regen_kwh
+            name: Regenerada (kWh)
+            icon: mdi:battery-charging-high
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_a_concluida
+            attribute: net_kwh
+            name: Líquido (kWh)
+            icon: mdi:lightning-bolt
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_a_concluida
+            attribute: soc_start
+            name: SOC início (%)
+            icon: mdi:battery-charging
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_a_concluida
+            attribute: soc_end
+            name: SOC fim (%)
+            icon: mdi:battery
+          - type: section
+            label: "⛽ Combustível"
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_a_concluida
+            attribute: km_per_l
+            name: km/L
+            icon: mdi:gas-station
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_a_concluida
+            attribute: fuel_l
+            name: Combustível (L)
+            icon: mdi:fuel
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_a_concluida
+            attribute: tank_start_l
+            name: Tanque início (L)
+            icon: mdi:fuel
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_a_concluida
+            attribute: tank_end_l
+            name: Tanque fim (L)
+            icon: mdi:fuel
+          - type: section
+            label: "📍 Viagem"
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_a_concluida
+            attribute: avg_speed_kmh
+            name: Vel. média (km/h)
+            icon: mdi:speedometer
+
+      # ── Última viagem Trip B ───────────────────────────────────────────────
+      - type: entities
+        title: 🏁 Última Viagem — Trip B
+        show_header_toggle: false
+        entities:
+          - entity: sensor.haval_ecotrip_trip_b_concluida
+            name: Distância
+            icon: mdi:road-variant
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_b_concluida
+            attribute: name
+            name: Nome da viagem
+            icon: mdi:tag-text
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_b_concluida
+            attribute: timestamp
+            name: Data/hora
+            icon: mdi:calendar-clock
+          - type: section
+            label: "⚡ Energia"
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_b_concluida
+            attribute: kwh_per_100km
+            name: kWh/100km
+            icon: mdi:lightning-bolt-circle
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_b_concluida
+            attribute: energy_kwh
+            name: Energia bruta (kWh)
+            icon: mdi:flash
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_b_concluida
+            attribute: regen_kwh
+            name: Regenerada (kWh)
+            icon: mdi:battery-charging-high
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_b_concluida
+            attribute: net_kwh
+            name: Líquido (kWh)
+            icon: mdi:lightning-bolt
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_b_concluida
+            attribute: soc_start
+            name: SOC início (%)
+            icon: mdi:battery-charging
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_b_concluida
+            attribute: soc_end
+            name: SOC fim (%)
+            icon: mdi:battery
+          - type: section
+            label: "⛽ Combustível"
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_b_concluida
+            attribute: km_per_l
+            name: km/L
+            icon: mdi:gas-station
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_b_concluida
+            attribute: fuel_l
+            name: Combustível (L)
+            icon: mdi:fuel
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_b_concluida
+            attribute: tank_start_l
+            name: Tanque início (L)
+            icon: mdi:fuel
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_b_concluida
+            attribute: tank_end_l
+            name: Tanque fim (L)
+            icon: mdi:fuel
+          - type: section
+            label: "📍 Viagem"
+          - type: attribute
+            entity: sensor.haval_ecotrip_trip_b_concluida
+            attribute: avg_speed_kmh
+            name: Vel. média (km/h)
+            icon: mdi:speedometer
+
+      # ── Comparativo histórico ─────────────────────────────────────────────
+      - type: history-graph
+        title: Histórico distância — Trips concluídas
+        hours_to_show: 168
+        entities:
+          - entity: sensor.haval_ecotrip_trip_a_concluida
+            name: Trip A concluída (km)
+          - entity: sensor.haval_ecotrip_trip_b_concluida
+            name: Trip B concluída (km)
+
+  ##########################################################################
+  # VIEW 5 — GRÁFICOS COM FILTRO DE PERÍODO
+  ##########################################################################
+  - title: Gráficos
+    path: ecotrip-graficos
+    icon: mdi:chart-line
+
+    cards:
+
+      # ── Seletor de período ────────────────────────────────────────────────
+      - type: entities
+        title: Filtro de período
+        show_header_toggle: false
+        entities:
+          - entity: input_select.ecotrip_periodo
+            name: Período
+            icon: mdi:calendar-range
+
+      # Inputs de data — visíveis só quando "Personalizado"
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.ecotrip_periodo
+            state: "Personalizado"
+        card:
+          type: entities
+          title: Intervalo personalizado
+          show_header_toggle: false
+          entities:
+            - entity: input_datetime.ecotrip_data_inicio
+              name: Data início
+            - entity: input_datetime.ecotrip_data_fim
+              name: Data fim
+
+      # ════════════════════════════════════════════════════════════════════
+      # BLOCO A — 24 horas
+      # ════════════════════════════════════════════════════════════════════
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.ecotrip_periodo
+            state: "Últimas 24h"
+        card:
+          type: vertical-stack
+          cards:
+            - type: history-graph
+              title: ⚡ Consumo elétrico — 24h
+              hours_to_show: 24
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_kwh_100km
+                  name: Trip A kWh/100km
+                - entity: sensor.haval_ecotrip_trip_b_kwh_100km
+                  name: Trip B kWh/100km
+                - entity: sensor.haval_ecotrip_rolling_kwh_100km
+                  name: Rolling kWh/100km
+            - type: history-graph
+              title: ⛽ Rendimento combustível — 24h
+              hours_to_show: 24
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_km_l
+                  name: Trip A km/L
+                - entity: sensor.haval_ecotrip_trip_b_km_l
+                  name: Trip B km/L
+                - entity: sensor.haval_ecotrip_rolling_km_l
+                  name: Rolling km/L
+            - type: history-graph
+              title: 📍 Distância & Combustível — 24h
+              hours_to_show: 24
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_distancia
+                  name: Trip A (km)
+                - entity: sensor.haval_ecotrip_trip_b_distancia
+                  name: Trip B (km)
+                - entity: sensor.haval_ecotrip_trip_a_combustivel
+                  name: Trip A comb. (L)
+                - entity: sensor.haval_ecotrip_trip_b_combustivel
+                  name: Trip B comb. (L)
+
+      # ════════════════════════════════════════════════════════════════════
+      # BLOCO B — 7 dias
+      # ════════════════════════════════════════════════════════════════════
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.ecotrip_periodo
+            state: "Últimos 7 dias"
+        card:
+          type: vertical-stack
+          cards:
+            - type: statistics-graph
+              title: ⚡ Consumo elétrico — 7 dias (média diária)
+              days_to_show: 7
+              period: day
+              stat_types:
+                - mean
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_kwh_100km
+                  name: Trip A kWh/100km
+                - entity: sensor.haval_ecotrip_trip_b_kwh_100km
+                  name: Trip B kWh/100km
+                - entity: sensor.haval_ecotrip_rolling_kwh_100km
+                  name: Rolling kWh/100km
+            - type: statistics-graph
+              title: ⛽ Rendimento combustível — 7 dias
+              days_to_show: 7
+              period: day
+              stat_types:
+                - mean
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_km_l
+                  name: Trip A km/L
+                - entity: sensor.haval_ecotrip_trip_b_km_l
+                  name: Trip B km/L
+                - entity: sensor.haval_ecotrip_rolling_km_l
+                  name: Rolling km/L
+            - type: statistics-graph
+              title: 📍 Distância acumulada — 7 dias
+              days_to_show: 7
+              period: day
+              stat_types:
+                - max
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_distancia
+                  name: Trip A (km)
+                - entity: sensor.haval_ecotrip_trip_b_distancia
+                  name: Trip B (km)
+            - type: statistics-graph
+              title: ⛽ Combustível gasto — 7 dias
+              days_to_show: 7
+              period: day
+              stat_types:
+                - max
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_combustivel
+                  name: Trip A (L)
+                - entity: sensor.haval_ecotrip_trip_b_combustivel
+                  name: Trip B (L)
+
+      # ════════════════════════════════════════════════════════════════════
+      # BLOCO C — 15 dias
+      # ════════════════════════════════════════════════════════════════════
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.ecotrip_periodo
+            state: "Últimos 15 dias"
+        card:
+          type: vertical-stack
+          cards:
+            - type: statistics-graph
+              title: ⚡ Consumo elétrico — 15 dias
+              days_to_show: 15
+              period: day
+              stat_types:
+                - mean
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_kwh_100km
+                  name: Trip A kWh/100km
+                - entity: sensor.haval_ecotrip_trip_b_kwh_100km
+                  name: Trip B kWh/100km
+                - entity: sensor.haval_ecotrip_rolling_kwh_100km
+                  name: Rolling kWh/100km
+            - type: statistics-graph
+              title: ⛽ Rendimento combustível — 15 dias
+              days_to_show: 15
+              period: day
+              stat_types:
+                - mean
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_km_l
+                  name: Trip A km/L
+                - entity: sensor.haval_ecotrip_trip_b_km_l
+                  name: Trip B km/L
+                - entity: sensor.haval_ecotrip_rolling_km_l
+                  name: Rolling km/L
+            - type: statistics-graph
+              title: 📍 Distância acumulada — 15 dias
+              days_to_show: 15
+              period: day
+              stat_types:
+                - max
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_distancia
+                  name: Trip A (km)
+                - entity: sensor.haval_ecotrip_trip_b_distancia
+                  name: Trip B (km)
+            - type: statistics-graph
+              title: ⛽ Combustível gasto — 15 dias
+              days_to_show: 15
+              period: day
+              stat_types:
+                - max
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_combustivel
+                  name: Trip A (L)
+                - entity: sensor.haval_ecotrip_trip_b_combustivel
+                  name: Trip B (L)
+
+      # ════════════════════════════════════════════════════════════════════
+      # BLOCO D — 30 dias
+      # ════════════════════════════════════════════════════════════════════
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.ecotrip_periodo
+            state: "Últimos 30 dias"
+        card:
+          type: vertical-stack
+          cards:
+            - type: statistics-graph
+              title: ⚡ Consumo elétrico — 30 dias
+              days_to_show: 30
+              period: day
+              stat_types:
+                - mean
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_kwh_100km
+                  name: Trip A kWh/100km
+                - entity: sensor.haval_ecotrip_trip_b_kwh_100km
+                  name: Trip B kWh/100km
+                - entity: sensor.haval_ecotrip_rolling_kwh_100km
+                  name: Rolling kWh/100km
+            - type: statistics-graph
+              title: ⛽ Rendimento combustível — 30 dias
+              days_to_show: 30
+              period: day
+              stat_types:
+                - mean
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_km_l
+                  name: Trip A km/L
+                - entity: sensor.haval_ecotrip_trip_b_km_l
+                  name: Trip B km/L
+                - entity: sensor.haval_ecotrip_rolling_km_l
+                  name: Rolling km/L
+            - type: statistics-graph
+              title: 📍 Distância acumulada — 30 dias
+              days_to_show: 30
+              period: week
+              stat_types:
+                - max
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_distancia
+                  name: Trip A (km)
+                - entity: sensor.haval_ecotrip_trip_b_distancia
+                  name: Trip B (km)
+            - type: statistics-graph
+              title: ⛽ Combustível gasto — 30 dias
+              days_to_show: 30
+              period: week
+              stat_types:
+                - max
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_combustivel
+                  name: Trip A (L)
+                - entity: sensor.haval_ecotrip_trip_b_combustivel
+                  name: Trip B (L)
+
+      # ════════════════════════════════════════════════════════════════════
+      # BLOCO E — Personalizado (requer custom:apexcharts-card do HACS)
+      # ════════════════════════════════════════════════════════════════════
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.ecotrip_periodo
+            state: "Personalizado"
+        card:
+          type: vertical-stack
+          cards:
+            - type: markdown
+              content: >
+                #### 📊 Gráfico por intervalo personalizado
+
+                **Requer `custom:apexcharts-card`** instalado via HACS.
+
+                Após instalar, substitua este card pelo YAML abaixo:
+
+                ```yaml
+                type: custom:apexcharts-card
+                graph_span: >-
+                  {{ [ ((as_timestamp(states('input_datetime.ecotrip_data_fim'))
+                         - as_timestamp(states('input_datetime.ecotrip_data_inicio')))
+                        / 3600) | round(0), 1 ] | max }}h
+                span:
+                  start: second
+                  offset: >-
+                    -{{ [ ((as_timestamp(now())
+                            - as_timestamp(states('input_datetime.ecotrip_data_inicio')))
+                           / 3600) | round(0), 0 ] | max }}h
+                header:
+                  show: true
+                  title: "⚡ Consumo elétrico — período personalizado"
+                  show_states: true
+                series:
+                  - entity: sensor.haval_ecotrip_trip_a_kwh_100km
+                    name: Trip A kWh/100km
+                    color: "#30D158"
+                  - entity: sensor.haval_ecotrip_trip_b_kwh_100km
+                    name: Trip B kWh/100km
+                    color: "#0A84FF"
+                  - entity: sensor.haval_ecotrip_rolling_kwh_100km
+                    name: Rolling kWh/100km
+                    color: "#FFD60A"
+                ```
+
+            - type: statistics-graph
+              title: ⚡ Consumo elétrico (intervalo calculado)
+              days_to_show: 30
+              period: day
+              stat_types:
+                - mean
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_kwh_100km
+                  name: Trip A kWh/100km
+                - entity: sensor.haval_ecotrip_trip_b_kwh_100km
+                  name: Trip B kWh/100km
+                - entity: sensor.haval_ecotrip_rolling_kwh_100km
+                  name: Rolling kWh/100km
+            - type: statistics-graph
+              title: ⛽ Rendimento combustível (intervalo calculado)
+              days_to_show: 30
+              period: day
+              stat_types:
+                - mean
+              entities:
+                - entity: sensor.haval_ecotrip_trip_a_km_l
+                  name: Trip A km/L
+                - entity: sensor.haval_ecotrip_trip_b_km_l
+                  name: Trip B km/L
+                - entity: sensor.haval_ecotrip_rolling_km_l
+                  name: Rolling km/L
+
+  ##########################################################################
+  # VIEW 6 — CONTROLES
+  ##########################################################################
+  - title: Controles
+    path: ecotrip-controles
+    icon: mdi:tune
+
+    cards:
+
+      - type: markdown
+        content: >
+          ## ⚙️ Controles do Veículo
+
+          Envia comandos MQTT para o app no carro, que repassa para o veículo.
+
+      - type: entities
+        title: Limite de Carga da Bateria
+        show_header_toggle: false
+        entities:
+          - entity: select.haval_ecotrip_charge_limit
+            name: Limite SOC (%)
+            icon: mdi:battery-charging-80
+
+      - type: markdown
+        content: >
+          **Tópico de comando:** `haval/ecotrip/cmd/charge_limit`
+
+          **Valores aceitos:** 50, 60, 70, 80, 90, 100
+
+          O app no carro converte para o valor que o veículo entende
+          e confirma em `haval/ecotrip/cmd/charge_limit/result`.
+
+      - type: logbook
+        title: Log de comandos recentes
+        hours_to_show: 24
+        entities:
+          - sensor.haval_ecotrip_trip_a_concluida
+          - sensor.haval_ecotrip_trip_b_concluida

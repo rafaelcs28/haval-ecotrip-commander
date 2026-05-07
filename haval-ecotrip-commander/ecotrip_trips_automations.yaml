@@ -1,0 +1,84 @@
+##############################################################################
+# Haval Ecotrip — Automações de Histórico de Trips
+#
+# COMO ADICIONAR AO HOME ASSISTANT:
+#
+#   Opção A — Via packages (recomendado):
+#     Copie para /config/packages/ecotrip_trips.yaml
+#     e no configuration.yaml adicione:
+#       homeassistant:
+#         packages:
+#           ecotrip_trips: !include packages/ecotrip_trips.yaml
+#
+#   Opção B — Via automations.yaml:
+#     Cole as automações abaixo em automations.yaml
+#     (ou importe via Editor de Automações em modo YAML).
+#
+# COMO FUNCIONA:
+#   - O app no carro publica cada trip concluída em haval/ecotrip/trips/new_trip
+#     (NÃO retido — evento único).
+#   - A automação ecotrip_trip_accumulate recebe e insere no início da lista
+#     retida em haval/ecotrip/trips/history.
+#   - O HA é a fonte de verdade: limpar histórico no app NÃO apaga aqui.
+#   - A automação ecotrip_trip_delete remove uma trip pelo timestamp.
+##############################################################################
+
+automation:
+
+  ##########################################################################
+  # 1. Acumula novo trip no histórico retido
+  ##########################################################################
+  - id: ecotrip_trip_accumulate
+    alias: "Ecotrip — Acumula novo trip no histórico"
+    description: >
+      Recebe cada trip concluída em trips/new_trip e insere no início
+      da lista retida trips/history. O HA é a fonte de verdade.
+    trigger:
+      - platform: mqtt
+        topic: haval/ecotrip/trips/new_trip
+    action:
+      - variables:
+          new_trip: "{{ trigger.payload_json }}"
+          current_list: >
+            {% set attr = state_attr('sensor.haval_ecotrip_historico_de_trips', 'trips') %}
+            {{ attr if attr is not none else [] }}
+          updated_list: >
+            {{ ([new_trip] + current_list) | list }}
+      - service: mqtt.publish
+        data:
+          topic: haval/ecotrip/trips/history
+          retain: true
+          qos: 1
+          payload: >
+            {{ {"count": updated_list | length, "trips": updated_list} | to_json }}
+    mode: queued
+    max: 5
+
+  ##########################################################################
+  # 2. Deleta trip por timestamp
+  ##########################################################################
+  - id: ecotrip_trip_delete
+    alias: "Ecotrip — Deletar trip do histórico"
+    description: >
+      Recebe o timestamp ISO da trip a deletar via cmd/delete_trip
+      e publica a lista atualizada (sem a trip removida) de volta.
+    trigger:
+      - platform: mqtt
+        topic: haval/ecotrip/cmd/delete_trip
+    action:
+      - variables:
+          target_ts: "{{ trigger.payload | trim }}"
+          current_list: >
+            {% set attr = state_attr('sensor.haval_ecotrip_historico_de_trips', 'trips') %}
+            {{ attr if attr is not none else [] }}
+          filtered_list: >
+            {{ current_list | selectattr('timestamp', '!=', target_ts) | list }}
+      - service: mqtt.publish
+        data:
+          topic: haval/ecotrip/trips/history
+          retain: true
+          qos: 1
+          payload: >
+            {{ {"count": filtered_list | length, "trips": filtered_list} | to_json }}
+    mode: queued
+    max: 5

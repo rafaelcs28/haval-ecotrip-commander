@@ -1,0 +1,171 @@
+##############################################################################
+# Haval Ecotrip — Automações de Recarga
+#
+# COMO ADICIONAR AO HOME ASSISTANT:
+#
+#   Opção A — Via packages (recomendado):
+#     Copie para /config/packages/ecotrip_charging.yaml
+#     e no configuration.yaml adicione:
+#       homeassistant:
+#         packages:
+#           ecotrip_charging: !include packages/ecotrip_charging.yaml
+#
+#   Opção B — Manual:
+#     Cole as automações abaixo em automations.yaml ou via Editor de Automações.
+#
+# PRÉ-REQUISITO:
+#   Os helpers input_number.ecotrip_charging_start_soc e
+#   input_text.ecotrip_charging_start_time devem existir
+#   (definidos em ecotrip_helpers.yaml).
+#
+# COMO FUNCIONA:
+#   1. Quando o estado muda para "Carregando", salva SOC + timestamp nos helpers.
+#   2. Quando o estado muda para "Finalizado", calcula energia e duração,
+#      e publica no tópico MQTT new_session (não retido).
+#   3. Uma segunda automação escuta new_session e acumula no histórico retido.
+#   4. Uma terceira automação processa o comando de deleção.
+#
+# Lógica de energia:
+#   Bateria HEV Haval = 34 kWh nominais.
+#   Energia carregada = (SOC_fim - SOC_início) / 100 × 34 kWh
+#   Exemplo: de 20% para 80% = 60% × 34 = 20,4 kWh
+##############################################################################
+
+automation:
+
+  ##########################################################################
+  # 1. Início de recarga — salva SOC e timestamp
+  ##########################################################################
+  - id: ecotrip_charging_start
+    alias: "Ecotrip — Início de recarga"
+    description: >
+      Quando o estado muda para "Carregando", registra o SOC atual
+      e o timestamp para uso posterior no cálculo de energia.
+    trigger:
+      - platform: state
+        entity_id: sensor.haval_ecotrip_estado_de_recarga
+        to: "Carregando"
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ecotrip_charging_start_soc
+        data:
+          value: >
+            {{ states('sensor.haval_ecotrip_trip_a_soc_atual') | float(0) }}
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ecotrip_charging_start_time
+        data:
+          value: "{{ now().isoformat() }}"
+    mode: single
+
+  ##########################################################################
+  # 2. Fim de recarga — calcula energia e publica new_session
+  ##########################################################################
+  - id: ecotrip_charging_end
+    alias: "Ecotrip — Fim de recarga (Finalizado)"
+    description: >
+      Quando o estado muda para "Finalizado", calcula a energia carregada
+      com base no delta de SOC × 34 kWh e publica a sessão via MQTT.
+    trigger:
+      - platform: state
+        entity_id: sensor.haval_ecotrip_estado_de_recarga
+        to: "Finalizado"
+    condition:
+      # Só processa se realmente houve uma sessão registrada
+      - condition: template
+        value_template: >
+          {{ states('input_text.ecotrip_charging_start_time') | length > 5 }}
+    action:
+      - variables:
+          soc_start: "{{ states('input_number.ecotrip_charging_start_soc') | float(0) }}"
+          soc_end: "{{ states('sensor.haval_ecotrip_trip_a_soc_atual') | float(0) }}"
+          soc_delta: "{{ [soc_end - soc_start, 0] | max }}"
+          energy_kwh: "{{ (soc_delta / 100.0 * 34.0) | round(2) }}"
+          start_time_str: "{{ states('input_text.ecotrip_charging_start_time') }}"
+          duration_min: >
+            {% set start = as_datetime(start_time_str) %}
+            {% if start %}
+              {{ ((now() - start).total_seconds() / 60) | int }}
+            {% else %}
+              0
+            {% endif %}
+      - service: mqtt.publish
+        data:
+          topic: haval/ecotrip/charging/new_session
+          retain: false
+          qos: 1
+          payload: >
+            {
+              "timestamp": "{{ now().strftime('%Y-%m-%dT%H:%M:%S') }}",
+              "soc_start": {{ soc_start | round(1) }},
+              "soc_end": {{ soc_end | round(1) }},
+              "soc_delta": {{ soc_delta | round(1) }},
+              "energy_kwh": {{ energy_kwh }},
+              "duration_min": {{ duration_min }}
+            }
+      # Limpa os helpers para não reaproveitar dados de sessão anterior
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ecotrip_charging_start_time
+        data:
+          value: ""
+    mode: single
+
+  ##########################################################################
+  # 3. Acumula new_session no histórico retido
+  ##########################################################################
+  - id: ecotrip_charging_accumulate
+    alias: "Ecotrip — Acumula histórico de recargas"
+    description: >
+      Escuta o tópico new_session (não retido) e insere a nova sessão
+      no início da lista de histórico retida no HA como source of truth.
+    trigger:
+      - platform: mqtt
+        topic: haval/ecotrip/charging/new_session
+    action:
+      - variables:
+          new_session: "{{ trigger.payload_json }}"
+          current_list: >
+            {% set attr = state_attr('sensor.haval_ecotrip_historico_de_recargas', 'sessions') %}
+            {{ attr if attr is not none else [] }}
+          updated_list: >
+            {{ ([new_session] + current_list) | list }}
+      - service: mqtt.publish
+        data:
+          topic: haval/ecotrip/charging/history
+          retain: true
+          qos: 1
+          payload: >
+            {{ {"count": updated_list | length, "sessions": updated_list} | to_json }}
+    mode: queued
+    max: 5
+
+  ##########################################################################
+  # 4. Deleta sessão de recarga por timestamp
+  ##########################################################################
+  - id: ecotrip_charging_delete
+    alias: "Ecotrip — Deletar sessão de recarga"
+    description: >
+      Escuta o tópico cmd/delete_charging_session. O payload é o timestamp
+      ISO da sessão a ser removida do histórico.
+    trigger:
+      - platform: mqtt
+        topic: haval/ecotrip/cmd/delete_charging_session
+    action:
+      - variables:
+          target_ts: "{{ trigger.payload | trim }}"
+          current_list: >
+            {% set attr = state_attr('sensor.haval_ecotrip_historico_de_recargas', 'sessions') %}
+            {{ attr if attr is not none else [] }}
+          filtered_list: >
+            {{ current_list | selectattr('timestamp', '!=', target_ts) | list }}
+      - service: mqtt.publish
+        data:
+          topic: haval/ecotrip/charging/history
+          retain: true
+          qos: 1
+          payload: >
+            {{ {"count": filtered_list | length, "sessions": filtered_list} | to_json }}
+    mode: queued
+    max: 5
